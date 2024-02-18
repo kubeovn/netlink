@@ -996,28 +996,28 @@ func LinkSetXdpFdWithFlags(link Link, fd, flags int) error {
 // LinkSetGSOMaxSegs sets the GSO maximum segment count of the link device.
 // Equivalent to: `ip link set $link gso_max_segs $maxSegs`
 func LinkSetGSOMaxSegs(link Link, maxSegs int) error {
-       return pkgHandle.LinkSetGSOMaxSegs(link, maxSegs)
+	return pkgHandle.LinkSetGSOMaxSegs(link, maxSegs)
 }
 
 // LinkSetGSOMaxSegs sets the GSO maximum segment count of the link device.
 // Equivalent to: `ip link set $link gso_max_segs $maxSegs`
 func (h *Handle) LinkSetGSOMaxSegs(link Link, maxSize int) error {
-       base := link.Attrs()
-       h.ensureIndex(base)
-       req := h.newNetlinkRequest(unix.RTM_SETLINK, unix.NLM_F_ACK)
+	base := link.Attrs()
+	h.ensureIndex(base)
+	req := h.newNetlinkRequest(unix.RTM_SETLINK, unix.NLM_F_ACK)
 
-       msg := nl.NewIfInfomsg(unix.AF_UNSPEC)
-       msg.Index = int32(base.Index)
-       req.AddData(msg)
+	msg := nl.NewIfInfomsg(unix.AF_UNSPEC)
+	msg.Index = int32(base.Index)
+	req.AddData(msg)
 
-       b := make([]byte, 4)
-       native.PutUint32(b, uint32(maxSize))
+	b := make([]byte, 4)
+	native.PutUint32(b, uint32(maxSize))
 
-       data := nl.NewRtAttr(unix.IFLA_GSO_MAX_SEGS, b)
-       req.AddData(data)
+	data := nl.NewRtAttr(unix.IFLA_GSO_MAX_SEGS, b)
+	req.AddData(data)
 
-       _, err := req.Execute(unix.NETLINK_ROUTE, 0)
-       return err
+	_, err := req.Execute(unix.NETLINK_ROUTE, 0)
+	return err
 }
 
 // LinkSetGSOMaxSize sets the IPv6 GSO maximum size of the link device.
@@ -2172,6 +2172,16 @@ func LinkDeserialize(hdr *unix.NlMsghdr, m []byte) (Link, error) {
 			base.NumRxQueues = int(native.Uint32(attr.Value[0:4]))
 		case unix.IFLA_GROUP:
 			base.Group = native.Uint32(attr.Value[0:4])
+		case unix.IFLA_PROP_LIST | unix.NLA_F_NESTED:
+			data, err := nl.ParseRouteAttr(attr.Value)
+			if err != nil {
+				return nil, err
+			}
+			altNames, err := parsePropertyList(data)
+			if err != nil {
+				return nil, err
+			}
+			base.Properties.AlternativeIfnames = altNames
 		}
 	}
 
@@ -2624,6 +2634,56 @@ func parseNetkitData(link Link, data []syscall.NetlinkRouteAttr) {
 			netkit.PeerPolicy = NetkitPolicy(native.Uint32(datum.Value[0:4]))
 		}
 	}
+}
+
+// LinkAddAltName adds alternative names to a link
+// Equivalent to: `ip link property add dev $link altname $name`
+func LinkAddAltName(link Link, altName string) error {
+	return pkgHandle.LinkAddAltName(link, altName)
+}
+
+// LinkAddAltName adds alternative names to a link
+// Equivalent to: `ip link property add dev $link altname $name`
+func (h *Handle) LinkAddAltName(link Link, altName string) error {
+	base := link.Attrs()
+	h.ensureIndex(base)
+	req := h.newNetlinkRequest(unix.RTM_NEWLINKPROP, unix.NLM_F_ACK|unix.NLM_F_EXCL|unix.NLM_F_CREATE|unix.NLM_F_APPEND)
+
+	msg := nl.NewIfInfomsg(unix.AF_UNSPEC)
+	msg.Index = int32(base.Index)
+	req.AddData(msg)
+
+	data := nl.NewRtAttr(unix.IFLA_PROP_LIST|unix.NLA_F_NESTED, nil)
+	data.AddRtAttr(unix.IFLA_ALT_IFNAME, []byte(altName))
+	req.AddData(data)
+
+	_, err := req.Execute(unix.NETLINK_ROUTE, 0)
+	return err
+}
+
+// LinkDelAltName deletes alternative names from a link
+// Equivalent to: `ip link property del dev $link altname $name`
+func LinkDelAltName(link Link, altName string) error {
+	return pkgHandle.LinkDelAltName(link, altName)
+}
+
+// LinkDelAltName deletes alternative names from a link
+// Equivalent to: `ip link property del dev $link altname $name`
+func (h *Handle) LinkDelAltName(link Link, altName string) error {
+	base := link.Attrs()
+	h.ensureIndex(base)
+	req := h.newNetlinkRequest(unix.RTM_DELLINKPROP, unix.NLM_F_ACK)
+
+	msg := nl.NewIfInfomsg(unix.AF_UNSPEC)
+	msg.Index = int32(base.Index)
+	req.AddData(msg)
+
+	data := nl.NewRtAttr(unix.IFLA_PROP_LIST|unix.NLA_F_NESTED, nil)
+	data.AddRtAttr(unix.IFLA_ALT_IFNAME, []byte(altName))
+	req.AddData(data)
+
+	_, err := req.Execute(unix.NETLINK_ROUTE, 0)
+	return err
 }
 
 func parseVlanData(link Link, data []syscall.NetlinkRouteAttr) {
@@ -3575,6 +3635,17 @@ func parseVfInfo(data []syscall.NetlinkRouteAttr, id int) (VfInfo, error) {
 		}
 	}
 	return vf, nil
+}
+
+func parsePropertyList(data []syscall.NetlinkRouteAttr) ([]string, error) {
+	var altNames []string
+	for _, element := range data {
+		if element.Attr.Type != unix.IFLA_ALT_IFNAME {
+			continue
+		}
+		altNames = append(altNames, string(element.Value[:len(element.Value)-1]))
+	}
+	return altNames, nil
 }
 
 func addXfrmiAttrs(xfrmi *Xfrmi, linkInfo *nl.RtAttr) {

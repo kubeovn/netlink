@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package netlink
@@ -324,7 +325,7 @@ func TestNeighSubscribe(t *testing.T) {
 	if err := NeighAdd(entry); err != nil {
 		t.Errorf("Failed to NeighAdd: %v", err)
 	}
-	if !expectNeighUpdate(ch, []NeighUpdate{NeighUpdate{
+	if !expectNeighUpdate(ch, []NeighUpdate{{
 		Type:  unix.RTM_NEWNEIGH,
 		Neigh: *entry,
 	}}) {
@@ -333,7 +334,7 @@ func TestNeighSubscribe(t *testing.T) {
 	if err := NeighDel(entry); err != nil {
 		t.Fatal(err)
 	}
-	if !expectNeighUpdate(ch, []NeighUpdate{NeighUpdate{
+	if !expectNeighUpdate(ch, []NeighUpdate{{
 		Type: unix.RTM_NEWNEIGH,
 		Neigh: Neigh{
 			State: NUD_FAILED,
@@ -386,7 +387,7 @@ func TestNeighSubscribeWithOptions(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to NeighAdd: %v", err)
 	}
-	if !expectNeighUpdate(ch, []NeighUpdate{NeighUpdate{
+	if !expectNeighUpdate(ch, []NeighUpdate{{
 		Type:  unix.RTM_NEWNEIGH,
 		Neigh: *entry,
 	}}) {
@@ -440,7 +441,7 @@ func TestNeighSubscribeAt(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to NeighAdd: %v", err)
 	}
-	if !expectNeighUpdate(ch, []NeighUpdate{NeighUpdate{
+	if !expectNeighUpdate(ch, []NeighUpdate{{
 		Type:  unix.RTM_NEWNEIGH,
 		Neigh: *entry,
 	}}) {
@@ -523,11 +524,11 @@ func TestNeighSubscribeListExisting(t *testing.T) {
 	}
 
 	if !expectNeighUpdate(ch, []NeighUpdate{
-		NeighUpdate{
+		{
 			Type:  unix.RTM_NEWNEIGH,
 			Neigh: *entry1,
 		},
-		NeighUpdate{
+		{
 			Type:  unix.RTM_NEWNEIGH,
 			Neigh: *entryBr,
 		},
@@ -547,7 +548,7 @@ func TestNeighSubscribeListExisting(t *testing.T) {
 		t.Errorf("Failed to NeighAdd: %v", err)
 	}
 
-	if !expectNeighUpdate(ch, []NeighUpdate{NeighUpdate{
+	if !expectNeighUpdate(ch, []NeighUpdate{{
 		Type:  unix.RTM_NEWNEIGH,
 		Neigh: *entry2,
 	}}) {
